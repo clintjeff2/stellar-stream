@@ -2,7 +2,7 @@ import cors from "cors";
 import express, { Request, Response } from "express";
 import swaggerUi from "swagger-ui-express";
 import { swaggerDocument } from "./swagger";
-import { openIssues } from "./services/openIssues";
+import { fetchOpenIssues } from "./services/openIssues";
 import "dotenv/config";
 import {
   calculateProgress,
@@ -154,8 +154,14 @@ app.post("/api/streams/:id/cancel", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/open-issues", (_req: Request, res: Response) => {
-  res.json({ data: openIssues });
+app.get("/api/open-issues", async (_req: Request, res: Response) => {
+  try {
+    const data = await fetchOpenIssues();
+    res.json({ data });
+  } catch (err: any) {
+    console.error("Failed to fetch open issues from proxy:", err);
+    res.status(500).json({ error: err.message || "Failed to fetch open issues." });
+  }
 });
 
 async function startServer() {
