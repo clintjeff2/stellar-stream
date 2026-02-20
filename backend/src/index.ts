@@ -1,4 +1,5 @@
 import cors from "cors";
+import "dotenv/config";
 import express, { Request, Response } from "express";
 import { openIssues } from "./services/openIssues";
 import {
@@ -12,7 +13,9 @@ import {
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
-const ALLOWED_ASSETS = ["USD", "EUR", "BRL", "CNY"];
+const ALLOWED_ASSETS = (process.env.ALLOWED_ASSETS || 'USDC,XLM')
+  .split(',')
+  .map(a => a.trim().toUpperCase());
 
 app.use(cors());
 app.use(express.json());
@@ -116,20 +119,24 @@ app.get("/api/streams/:id", (req: Request, res: Response) => {
   });
 });
 
-app.post("/api/streams", (req: Request, res: Response) => {
-  const parsed = parseInput(req.body);
-  if (!parsed.ok) {
-    res.status(400).json({ error: parsed.message });
-    return;
+app.post("/api/streams", async (req: Request, res: Response) => {
+  try {
+    const parsed = parseInput(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.message });
+      return;
+    }
+    const stream = createStream(parsed.value);
+    res.status(201).json({
+      data: {
+        ...stream,
+        progress: calculateProgress(stream),
+      },
+    });
+  } catch (err: any) {
+    console.error("Error creating stream:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  const stream = createStream(parsed.value);
-  res.status(201).json({
-    data: {
-      ...stream,
-      progress: calculateProgress(stream),
-    },
-  });
 });
 
 app.post("/api/streams/:id/cancel", (req: Request, res: Response) => {
