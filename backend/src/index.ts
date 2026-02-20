@@ -1,5 +1,7 @@
 import cors from "cors";
 import express, { Request, Response } from "express";
+import swaggerUi from "swagger-ui-express";
+import { swaggerDocument } from "./swagger";
 import { openIssues } from "./services/openIssues";
 import "dotenv/config";
 import {
@@ -18,6 +20,8 @@ const port = Number(process.env.PORT ?? 3001);
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
