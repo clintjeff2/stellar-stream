@@ -8,6 +8,8 @@ import {
   createStream,
   getStream,
   listStreams,
+  initSoroban,
+  syncStreams,
   StreamInput,
 } from "./services/streamStore";
 
@@ -97,61 +99,38 @@ app.get("/api/health", (_req: Request, res: Response) => {
 });
 
 app.get("/api/streams", (_req: Request, res: Response) => {
-  const data = listStreams().map((stream) => ({
-    ...stream,
-    progress: calculateProgress(stream),
-  }));
+  const data = listStreams().map((stream) => ({ ...stream, progress: calculateProgress(stream) }));
   res.json({ data });
 });
 
 app.get("/api/streams/:id", (req: Request, res: Response) => {
   const stream = getStream(req.params.id);
-  if (!stream) {
-    res.status(404).json({ error: "Stream not found." });
-    return;
-  }
-
-  res.json({
-    data: {
-      ...stream,
-      progress: calculateProgress(stream),
-    },
-  });
+  if (!stream) { res.status(404).json({ error: "Stream not found." }); return; }
+  res.json({ data: { ...stream, progress: calculateProgress(stream) } });
 });
 
 app.post("/api/streams", async (req: Request, res: Response) => {
+  const parsed = parseInput(req.body);
+  if (!parsed.ok) { res.status(400).json({ error: parsed.message }); return; }
+
   try {
-    const parsed = parseInput(req.body);
-    if (!parsed.ok) {
-      res.status(400).json({ error: parsed.message });
-      return;
-    }
-    const stream = createStream(parsed.value);
-    res.status(201).json({
-      data: {
-        ...stream,
-        progress: calculateProgress(stream),
-      },
-    });
+    const stream = await createStream(parsed.value);
+    res.status(201).json({ data: { ...stream, progress: calculateProgress(stream) } });
   } catch (err: any) {
-    console.error("Error creating stream:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Failed to create stream:", err);
+    res.status(500).json({ error: err.message || "Failed to create stream." });
   }
 });
 
-app.post("/api/streams/:id/cancel", (req: Request, res: Response) => {
-  const stream = cancelStream(req.params.id);
-  if (!stream) {
-    res.status(404).json({ error: "Stream not found." });
-    return;
+app.post("/api/streams/:id/cancel", async (req: Request, res: Response) => {
+  try {
+    const stream = await cancelStream(req.params.id);
+    if (!stream) { res.status(404).json({ error: "Stream not found." }); return; }
+    res.json({ data: { ...stream, progress: calculateProgress(stream) } });
+  } catch (err: any) {
+    console.error("Failed to cancel stream:", err);
+    res.status(500).json({ error: err.message || "Failed to cancel stream." });
   }
-
-  res.json({
-    data: {
-      ...stream,
-      progress: calculateProgress(stream),
-    },
-  });
 });
 
 app.get("/api/open-issues", (_req: Request, res: Response) => {
@@ -162,6 +141,13 @@ app.get("/api/allowed-assets", (_req: Request, res: Response) => {
   res.json({ data: ALLOWED_ASSETS });
 });
 
-app.listen(port, () => {
-  console.log(`StellarStream API listening on http://localhost:${port}`);
-});
+async function startServer() {
+  await initSoroban();
+  await syncStreams();
+  app.listen(port, () => {
+    console.log(`StellarStream API listening on http://localhost:${port}`);
+    console.log(`Allowed assets: ${ALLOWED_ASSETS.join(", ")}`);
+  });
+}
+
+startServer().catch(console.error);
